@@ -1,0 +1,28 @@
+# IDE/editor
+.settings/
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# STM32CubeMX extra metadata
+.mxproject
+mx.scratch
+
+# Local clangd config
+.clangd
+
+# Build directories
+build/
+cmake-build-*/
+out/
+Debug/
+Release/
+
+# Build artifacts
+*.o
+*.obj
+*.d
+*.elf
+*.bin
+*.hex
+*.map
