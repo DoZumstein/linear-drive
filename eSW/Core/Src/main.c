@@ -18,11 +18,14 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "stm32wbxx_hal_gpio.h"
+#include "tim.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "button.h"
+#include "motor.h"
 
 /* USER CODE END Includes */
 
@@ -45,8 +48,11 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-volatile uint32_t ms_sample_tick = 0;
+volatile uint32_t ms_sample_tick,
+    ms_motor_tick = 0;
 
+MotorState WL_state;
+uint8_t WL_duty;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -96,9 +102,22 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-  Button switch_3;
-  button_init(&switch_3, SWITCH_3_GPIO_Port, SWITCH_3_Pin, LOW_ACTIVE);
+  // Button Setup
+  Button sw_1;
+  button_init(&sw_1, SWITCH_1_GPIO_Port, SWITCH_1_Pin, LOW_ACTIVE);
+  Button sw_2;
+  button_init(&sw_2, SWITCH_2_GPIO_Port, SWITCH_2_Pin, LOW_ACTIVE);
+  Button sw_3;
+  button_init(&sw_3, SWITCH_3_GPIO_Port, SWITCH_3_Pin, LOW_ACTIVE);
+
+  // Status LED
+
+  // Motor
+  Motor motor = {STOP, MOTOR_DUTY_START_VALUE};
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+  HAL_GPIO_WritePin(DC_EN_GPIO_Port, DC_EN_Pin, GPIO_PIN_SET);
 
   /* USER CODE END 2 */
 
@@ -109,15 +128,53 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    if (ms_sample_tick == BUTTON_MS_SAMPLE_RATE)
+    if (ms_sample_tick >= BUTTON_MS_SAMPLE_RATE)
     {
       ms_sample_tick = 0;
-      switch_3.sample(&switch_3);
+      sw_1.sample(&sw_1);
+      sw_2.sample(&sw_2);
+      sw_3.sample(&sw_3);
     }
 
-    if (switch_3.get_press(&switch_3))
+    if (sw_3.get_press(&sw_3))
     {
-      HAL_GPIO_TogglePin(LED_1_GPIO_Port, LED_1_Pin);
+      if (motor.state != STOP)
+      {
+        motor.state = STOP;
+        motor.duty_cycle += MOTOR_DUTY_START_VALUE;
+      }
+      else
+      {
+        motor.state = COUNTERCLOCKWISE;
+      }
+    }
+
+    if (sw_2.get_press(&sw_2))
+    {
+      motor.duty_cycle += MOTOR_DUTY_INCREMENT;
+    }
+
+    if (sw_1.get_press(&sw_1))
+    {
+      switch (motor.state)
+      {
+      case COUNTERCLOCKWISE:
+        motor.state = CLOCKWISE;
+        break;
+      case CLOCKWISE:
+        motor.state = COUNTERCLOCKWISE;
+        break;
+      default:
+        break;
+      }
+    }
+
+    if (ms_motor_tick >= 10)
+    {
+      ms_motor_tick = 0;
+      motor_control(&motor);
+      WL_state = motor.state;
+      WL_duty = motor.duty_cycle;
     }
   }
   /* USER CODE END 3 */
@@ -200,6 +257,7 @@ void PeriphCommonClock_Config(void)
 void HAL_SYSTICK_Callback()
 {
   ms_sample_tick++;
+  ms_motor_tick++;
 }
 
 /* USER CODE END 4 */
