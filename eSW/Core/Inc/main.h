@@ -63,6 +63,10 @@ void Error_Handler(void);
 #define RCC_OSC32_IN_GPIO_Port GPIOC
 #define RCC_OSC32_OUT_Pin GPIO_PIN_15
 #define RCC_OSC32_OUT_GPIO_Port GPIOC
+#define ENC_IN1_Pin GPIO_PIN_0
+#define ENC_IN1_GPIO_Port GPIOC
+#define ENC_IN2_Pin GPIO_PIN_2
+#define ENC_IN2_GPIO_Port GPIOC
 #define SWITCH_1_Pin GPIO_PIN_4
 #define SWITCH_1_GPIO_Port GPIOC
 #define LED2_Pin GPIO_PIN_0

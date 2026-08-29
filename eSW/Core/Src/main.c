@@ -18,14 +18,17 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "stm32wbxx_hal_gpio.h"
+#include "dma.h"
+#include "lptim.h"
 #include "tim.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "button.h"
 #include "motor.h"
+#include "comms.h"
 
 /* USER CODE END Includes */
 
@@ -37,6 +40,8 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define BUTTON_MS_SAMPLE_RATE 1
+#define MOTOR_MS_CONTROL_RATE 5
+#define MS_UART_SAMPLE_RATE 20
 
 /* USER CODE END PD */
 
@@ -49,10 +54,12 @@
 
 /* USER CODE BEGIN PV */
 volatile uint32_t ms_sample_tick,
-    ms_motor_tick = 0;
+    ms_motor_tick, ms_uart_tick = 0;
 
-MotorState WL_state;
-uint8_t WL_duty;
+MotorState LW_state;
+uint8_t LW_duty;
+uint32_t LW_count;
+int16_t LW_rpm;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -102,7 +109,10 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_TIM2_Init();
+  MX_LPTIM1_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   // Button Setup
   Button sw_1;
@@ -115,9 +125,15 @@ int main(void)
   // Status LED
 
   // Motor
-  Motor motor = {STOP, MOTOR_DUTY_START_VALUE};
+  Motor motor = {STOP, MOTOR_DUTY_START_VALUE, 0};
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_GPIO_WritePin(DC_EN_GPIO_Port, DC_EN_Pin, GPIO_PIN_SET);
+
+  // Encoder
+  HAL_LPTIM_Encoder_Start(&hlptim1, 0xFFFF);
+
+  // Uart
+  uart_start_rx();
 
   /* USER CODE END 2 */
 
@@ -136,45 +152,20 @@ int main(void)
       sw_3.sample(&sw_3);
     }
 
-    if (sw_3.get_press(&sw_3))
+    if (ms_uart_tick >= MS_UART_SAMPLE_RATE)
     {
-      if (motor.state != STOP)
-      {
-        motor.state = STOP;
-        motor.duty_cycle += MOTOR_DUTY_START_VALUE;
-      }
-      else
-      {
-        motor.state = COUNTERCLOCKWISE;
-      }
+      parse_msg(&uart_handle, &motor);
     }
 
-    if (sw_2.get_press(&sw_2))
-    {
-      motor.duty_cycle += MOTOR_DUTY_INCREMENT;
-    }
-
-    if (sw_1.get_press(&sw_1))
-    {
-      switch (motor.state)
-      {
-      case COUNTERCLOCKWISE:
-        motor.state = CLOCKWISE;
-        break;
-      case CLOCKWISE:
-        motor.state = COUNTERCLOCKWISE;
-        break;
-      default:
-        break;
-      }
-    }
-
-    if (ms_motor_tick >= 10)
+    if (ms_motor_tick >= MOTOR_MS_CONTROL_RATE)
     {
       ms_motor_tick = 0;
       motor_control(&motor);
-      WL_state = motor.state;
-      WL_duty = motor.duty_cycle;
+
+      // Live Watch
+      LW_rpm = get_rpm(&motor);
+      LW_state = motor.state;
+      LW_duty = motor.duty_cycle;
     }
   }
   /* USER CODE END 3 */
@@ -258,6 +249,7 @@ void HAL_SYSTICK_Callback()
 {
   ms_sample_tick++;
   ms_motor_tick++;
+  ms_uart_tick++;
 }
 
 /* USER CODE END 4 */
